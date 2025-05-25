@@ -130,8 +130,7 @@ jobs:
           LAST_BUILD: ${{ inputs.LAST_BUILD }}
           TODO: ${{ inputs.TODO }}
         run: |
-          gh auth login --with-token < <(echo "$GH_TOKEN")
-          chmod +x *.sh
+          chmod a+x *.sh
           ./build.sh
 
       - name: Upload Artifacts (ZIP & IMG)
