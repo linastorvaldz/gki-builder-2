@@ -41,33 +41,57 @@ ZIP_NAME=${ZIP_NAME//KVER/$LINUX_VERSION}
 ZIP_NAME=${ZIP_NAME//VARIANT/$VARIANT}
 
 # Download Clang
-CLANG_PATH="$workdir/clang"
-
 log "🔽 Downloading Clang..."
-mkdir -p "$CLANG_PATH"
-wget -qO clang-tarball "$CLANG_URL" || error "Failed to download Clang."
-tar -xf clang-tarball -C "$CLANG_PATH/" || error "Failed to extract Clang."
-rm -f clang-tarball
+if ! [[ "$CLANG_URL" == "ubuntu" ]]; then
+  CLANG_PATH="$workdir/clang"
+  mkdir -p "$CLANG_PATH"
 
-if [[ $(find "$CLANG_PATH" -mindepth 1 -maxdepth 1 -type d | wc -l) -eq 1 ]] \
-  && [[ $(find "$CLANG_PATH" -mindepth 1 -maxdepth 1 -type f | wc -l) -eq 0 ]]; then
-  single_dir=$(find "$CLANG_PATH" -mindepth 1 -maxdepth 1 -type d)
-  mv "$single_dir"/* "$CLANG_PATH"/
-  rm -rf "$single_dir"
-fi
+  wget -qO clang-tarball "$CLANG_URL" || error "Failed to download Clang."
+  tar -xf clang-tarball -C "$CLANG_PATH/" || error "Failed to extract Clang."
+  rm -f clang-tarball
 
-export PATH="$CLANG_PATH/bin:$PATH"
-# Extract clang version
-COMPILER_STRING=$(clang -v 2>&1 | head -n 1 | sed 's/(https..*//' | sed 's/ version//')
-
-# Clone GCC
-if ! ls $CLANG_PATH/bin | grep -q "aarch64-linux-gnu"; then
-  git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-gnu-9.3 $workdir/gcc
-  export PATH="$workdir/gcc/bin:$PATH"
-  CROSS_COMPILE_PREFIX="aarch64-linux-"
+  if [[ $(find "$CLANG_PATH" -mindepth 1 -maxdepth 1 -type d | wc -l) -eq 1 ]] \
+    && [[ $(find "$CLANG_PATH" -mindepth 1 -maxdepth 1 -type f | wc -l) -eq 0 ]]; then
+    single_dir=$(find "$CLANG_PATH" -mindepth 1 -maxdepth 1 -type d)
+    mv "$single_dir"/* "$CLANG_PATH"/
+    rm -rf "$single_dir"
+  fi
+  export PATH="$CLANG_PATH/bin:$PATH"
+  LLVM_ADDITIONAL_PREFIX="1"
 else
-  CROSS_COMPILE_PREFIX="aarch64-linux-gnu-"
+  _LLVM_MAJOR_VERSION=$(gh api repos/llvm/llvm-project/releases/latest --jq '.tag_name | sub("llvmorg-"; "") | split(".")[0]' -r)
+  wget https://apt.llvm.org/llvm.sh
+  chmod a+x llvm.sh
+  sudo ./llvm.sh $_LLVM_MAJOR_VERSION all || error "Failed to install Ubuntu Clang"
+  rm -f llvm.sh
+  LLVM_ADDITIONAL_PREFIX="-$_LLVM_MAJOR_VERSION"
+  CLANG_ADDITIONAL_PREFIX="$LLVM_ADDITIONAL_PREFIX"
 fi
+
+if ! command -v aarch64-linux-gnu-as &> /dev/null; then
+  GCC64="$workdir/gcc-arm64"
+  GCC32="$workdir/gcc-arm32"
+  TEMPDIR=$(mktemp -d)
+
+  log "🔽 Downloading GCC..."
+  mkdir $GCC64
+  mkdir $GCC32
+  wget -q https://snapshots.linaro.org/gnu-toolchain/14.0-2023.06-1/aarch64-linux-gnu/gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz
+  wget -q https://snapshots.linaro.org/gnu-toolchain/14.0-2023.06-1/arm-linux-gnueabihf/gcc-linaro-14.0.0-2023.06-aarch64_arm-linux-gnueabihf.tar.xz
+  # arm64
+  tar -xf gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz -C $TEMPDIR
+  mv $TEMPDIR/* $GCC64
+  rm -rf $TEMPDIR/*
+  # arm32
+  tar -xf gcc-linaro-14.0.0-2023.06-aarch64_arm-linux-gnueabihf.tar.xz -C $TEMPDIR
+  mv $TEMPDIR/* $GCC32
+  rm -rf $TEMPDIR
+  rm -f *.tar.xz
+  export PATH="$GCC64/bin:$GCC32/bin:$PATH"
+fi
+
+# Extract clang version
+COMPILER_STRING=$(clang${CLANG_ADDITIONAL_PREFIX} -v 2>&1 | head -n 1 | sed 's/(https..*//' | sed 's/ version//')
 
 cd $workdir/ksrc
 # Apply LineageOS maphide patch
@@ -174,11 +198,17 @@ MESSAGE_ID=$(send_msg "$text" 2>&1 | jq -r .result.message_id)
 # Define make args
 MAKE_ARGS="
 -j$(nproc --all)
-ARCH=arm64
-LLVM=1
+LLVM=$LLVM_ADDITIONAL_PREFIX
 LLVM_IAS=1
+ARCH=arm64
+CROSS_COMPILE=aarch64-linux-gnu-
+CROSS_COMPILE_COMPAT=arm-linux-gnuabeihf-
+CROSS_COMPILE_ARM32=arm-linux-gnuabeihf-
+CC=clang
+LD=ld.lld
+HOSTCC=clang
+HOSTLD=ld.lld
 O=out
-CROSS_COMPILE=$CROSS_COMPILE_PREFIX
 "
 KERNEL_IMAGE=$workdir/ksrc/out/arch/arm64/boot/Image
 

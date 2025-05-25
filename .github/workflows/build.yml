@@ -115,10 +115,8 @@ jobs:
       - name: Install Dependencies
         run: |
           export MAN_DISABLE=true
-          sudo apt update -y
-          sudo apt install -y bc cpio flex bison aptitude gh git python-is-python3 \
-                              tar perl wget curl lz4 zstd libarchive-tools
-          sudo aptitude install -y libssl-dev
+          sudo apt update && sudo apt upgrade -y
+          sudo apt-get install curl bison flex make binutils dwarves git lld pahole zip perl make gcc python3 python-is-python3 bc libssl-dev libelf-dev -y
 
       - name: Run Build Script
         env:
@@ -132,6 +130,7 @@ jobs:
           LAST_BUILD: ${{ inputs.LAST_BUILD }}
           TODO: ${{ inputs.TODO }}
         run: |
+          gh auth login --with-token < <(echo "$GH_TOKEN")
           chmod +x *.sh
           ./build.sh
 

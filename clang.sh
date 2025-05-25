@@ -15,7 +15,7 @@ LILIUM_REPO="https://api.github.com/repos/liliumproject/clang/releases/latest"
 TNF_REPO="https://api.github.com/repos/topnotchfreaks/clang/releases/latest"
 
 show_usage() {
-  CLANG_NAME="slim, rv, aosp, yuki, lilium, tnf"
+  CLANG_NAME="slim, rv, aosp, yuki, lilium, tnf, ubuntu"
   echo "Usage: $0 <clang name>"
   echo "clang name: $CLANG_NAME"
 }
@@ -39,6 +39,9 @@ case "$1" in
     ;;
   "tnf")
     curl -s "$TNF_REPO" | grep "browser_download_url" | grep ".tar.gz" | cut -d '"' -f 4
+    ;;
+  "ubuntu")
+    echo "ubuntu"
     ;;
   *)
     if [[ -z $1 ]]; then
