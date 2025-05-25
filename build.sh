@@ -59,7 +59,7 @@ if ! [[ "$CLANG_URL" == "ubuntu" ]]; then
   export PATH="$CLANG_PATH/bin:$PATH"
   LLVM_ADDITIONAL_PREFIX="1"
 else
-  _LLVM_MAJOR_VERSION=$(gh api repos/llvm/llvm-project/releases/latest --jq '.tag_name | sub("llvmorg-"; "") | split(".")[0]' -r)
+  _LLVM_MAJOR_VERSION=$(curl -s https://api.github.com/repos/llvm/llvm-project/releases/latest | jq -r '.tag_name' | sed 's/llvmorg-\([0-9]*\).*/\1/')
   wget https://apt.llvm.org/llvm.sh
   chmod a+x llvm.sh
   sudo ./llvm.sh $_LLVM_MAJOR_VERSION all || error "Failed to install Ubuntu Clang"
